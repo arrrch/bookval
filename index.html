@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Book Price Scanner</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; }
+    #camera-preview { width: 100%; max-width: 400px; }
+    #result { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Book Price Scanner</h1>
+  <p>Take a photo of the book cover or side (for barcode).</p>
+  
+  <video id="camera-preview" autoplay playsinline></video>
+  <button id="capture-btn">Capture Photo</button>
+  <input type="file" id="upload-input" accept="image/*">
+  <canvas id="canvas" style="display: none;"></canvas>
+  
+  <div id="result"></div>
+
+  <script>
+    const video = document.getElementById('camera-preview');
+    const canvas = document.getElementById('canvas');
+    const captureBtn = document.getElementById('capture-btn');
+    const uploadInput = document.getElementById('upload-input');
+    const resultDiv = document.getElementById('result');
+
+    // Start camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => console.error('Camera access error:', err));
+
+    // Capture photo from camera
+    captureBtn.addEventListener('click', () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      processImage(canvas.toDataURL('image/png'));
+    });
+
+    // Handle file upload
+    uploadInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => processImage(event.target.result);
+      reader.readAsDataURL(file);
+    });
+
+    async function processImage(imageData) {
+      resultDiv.innerHTML = 'Processing...';
+
+      // Step 1: Try barcode scanning with Quagga
+      let isbn = await scanBarcode(imageData);
+      if (isbn) {
+        fetchBookInfo(isbn);
+        return;
+      }
+
+      // Step 2: Fallback to OCR with Tesseract
+      const { data: { text } } = await Tesseract.recognize(imageData, 'eng');
+      const cleanedText = text.replace(/[^a-zA-Z0-9 ]/g, '').trim(); // Basic cleanup
+      if (cleanedText) {
+        fetchBookInfo(cleanedText);
+      } else {
+        resultDiv.innerHTML = 'No text or barcode detected. Try again.';
+      }
+    }
+
+    function scanBarcode(imageData) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.src = imageData;
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          Quagga.decodeSingle({
+            decoder: { readers: ['ean_reader', 'ean_8_reader', 'upc_reader'] }, // For ISBN
+            locate: true,
+            src: canvas.toDataURL('image/png')
+          }, (result) => {
+            resolve(result?.codeResult?.code || null);
+          });
+        };
+      });
+    }
+
+    async function fetchBookInfo(query) {
+      try {
+        const response = await fetch(`/get-book-info?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        if (data.error) {
+          resultDiv.innerHTML = `Error
