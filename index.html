@@ -6,9 +6,117 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; }
-    #camera-preview { width: 100%; max-width: 400px; }
-    #result { margin-top: 20px; }
+    :root {
+      --primary-green: #4CAF50; /* Main green */
+      --light-green: #E8F5E9; /* Light background accent */
+      --dark-green: #388E3C; /* Darker for hover */
+      --white: #FFFFFF;
+      --gray: #F5F5F5; /* Light gray for backgrounds */
+      --text-color: #333333;
+      --border-radius: 8px;
+      --transition: all 0.3s ease;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--gray);
+      color: var(--text-color);
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      color: var(--primary-green);
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 1.1em;
+      margin-bottom: 20px;
+    }
+
+    #camera-preview {
+      width: 100%;
+      max-width: 400px;
+      border: 2px solid var(--primary-green);
+      border-radius: var(--border-radius);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      margin-bottom: 15px;
+    }
+
+    button, input[type="file"] {
+      background-color: var(--primary-green);
+      color: var(--white);
+      border: none;
+      padding: 12px 24px;
+      font-size: 1em;
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      transition: var(--transition);
+      margin: 10px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    button:hover, input[type="file"]:hover {
+      background-color: var(--dark-green);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    #result {
+      margin-top: 30px;
+      background-color: var(--white);
+      padding: 20px;
+      border-radius: var(--border-radius);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    #result.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #result h2 {
+      color: var(--primary-green);
+      margin-top: 0;
+    }
+
+    #result img {
+      max-width: 150px;
+      border-radius: var(--border-radius);
+      margin: 10px 0;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    #result a {
+      color: var(--primary-green);
+      text-decoration: none;
+      font-weight: bold;
+      transition: var(--transition);
+    }
+
+    #result a:hover {
+      color: var(--dark-green);
+    }
+
+    /* Smooth loading animation */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    body * {
+      animation: fadeIn 0.5s ease-in-out;
+    }
   </style>
 </head>
 <body>
@@ -52,6 +160,8 @@
 
     async function processImage(imageData) {
       resultDiv.innerHTML = 'Processing...';
+      resultDiv.classList.remove('visible'); // Reset animation
+      setTimeout(() => resultDiv.classList.add('visible'), 100); // Trigger animation
 
       // Step 1: Try barcode scanning with Quagga
       let isbn = await scanBarcode(imageData);
@@ -94,4 +204,23 @@
         const response = await fetch(`/get-book-info?query=${encodeURIComponent(query)}`);
         const data = await response.json();
         if (data.error) {
-          resultDiv.innerHTML = `Error
+          resultDiv.innerHTML = `Error: ${data.error}`;
+          return;
+        }
+        resultDiv.innerHTML = `
+          <h2>${data.title}</h2>
+          <p>Authors: ${data.authors}</p>
+          <p>ISBN: ${data.isbn}</p>
+          <img src="${data.coverImage}" alt="Cover">
+          <p>Description: ${data.description.substring(0, 200)}...</p>
+          <p>List Price: ${data.prices.listPrice}</p>
+          <p>Retail Price: ${data.prices.retailPrice}</p>
+          <a href="${data.prices.buyLink}" target="_blank">Buy on Google Books</a>
+        `;
+      } catch (err) {
+        resultDiv.innerHTML = 'Failed to fetch book info.';
+      }
+    }
+  </script>
+</body>
+</html>
